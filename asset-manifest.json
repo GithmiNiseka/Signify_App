@@ -1,0 +1,32 @@
+{
+  "files": {
+    "main.css": "/Signify_App/static/css/main.2c478211.css",
+    "main.js": "/Signify_App/static/js/main.8f353bf1.js",
+    "static/js/488.5b39e5ea.chunk.js": "/Signify_App/static/js/488.5b39e5ea.chunk.js",
+    "static/media/chest pain .jpeg": "/Signify_App/static/media/chest pain .bd2f9571727dbd43bb85.jpeg",
+    "static/media/Future.jpeg": "/Signify_App/static/media/Future.4f3af38782e70143a148.jpeg",
+    "static/media/Virus.jpeg": "/Signify_App/static/media/Virus.3bff9001bf0364f7995b.jpeg",
+    "static/media/Everyday.jpeg": "/Signify_App/static/media/Everyday.022c2f3afe46702c951d.jpeg",
+    "static/media/ChickenPox.jpeg": "/Signify_App/static/media/ChickenPox.bb4015c6928da8360886.jpeg",
+    "static/media/Always.jpeg": "/Signify_App/static/media/Always.90dba21580adc5cd517d.jpeg",
+    "static/media/September.jpeg": "/Signify_App/static/media/September.84f1cd74759aa9df4f09.jpeg",
+    "static/media/Term.jpeg": "/Signify_App/static/media/Term.0814bd80232893bfbe36.jpeg",
+    "static/media/Mumps.jpeg": "/Signify_App/static/media/Mumps.54a941ddc8c159bf6baf.jpeg",
+    "static/media/December.jpeg": "/Signify_App/static/media/December.be68f171656bb5cadd3f.jpeg",
+    "static/media/November.jpeg": "/Signify_App/static/media/November.cd907ba703c1c7c20c09.jpeg",
+    "static/media/Headache.jpeg": "/Signify_App/static/media/Headache.6ff2316197f416ab59a3.jpeg",
+    "static/media/Cold.jpeg": "/Signify_App/static/media/Cold.9f1cd251e276628eec54.jpeg",
+    "static/media/October.jpeg": "/Signify_App/static/media/October.8ce70243bae1b03bbc58.jpeg",
+    "static/media/Cough.jpeg": "/Signify_App/static/media/Cough.de413331f1fa0602f49b.jpeg",
+    "static/media/Faint.jpeg": "/Signify_App/static/media/Faint.248efe45ac6db32a6059.jpeg",
+    "static/media/Knee.jpeg": "/Signify_App/static/media/Knee.e510814b2ab15e5e896a.jpeg",
+    "index.html": "/Signify_App/index.html",
+    "main.2c478211.css.map": "/Signify_App/static/css/main.2c478211.css.map",
+    "main.8f353bf1.js.map": "/Signify_App/static/js/main.8f353bf1.js.map",
+    "488.5b39e5ea.chunk.js.map": "/Signify_App/static/js/488.5b39e5ea.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.2c478211.css",
+    "static/js/main.8f353bf1.js"
+  ]
+}
