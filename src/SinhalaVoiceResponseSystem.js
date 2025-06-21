@@ -221,6 +221,8 @@ const SinhalaVoiceResponseSystem = () => {
   const [vibrationIntensity, setVibrationIntensity] = useState(0);
   const [vibrationEnabled, setVibrationEnabled] = useState(true);
   const vibrationInterval = useRef(null);
+  const [isSomeoneSpeaking, setIsSomeoneSpeaking] = useState(false);
+  const speakingVibrationInterval = useRef(null);
 
   const isMobile = useRef(window.innerWidth <= 768);
 
@@ -232,32 +234,23 @@ const SinhalaVoiceResponseSystem = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const startVibration = useCallback((intensity = 1) => {
-    if (!isMobile.current || !('vibrate' in navigator) || !vibrationEnabled) return;
+  // Continuous vibration when someone is speaking
+  const startSpeakingVibration = useCallback(() => {
+    if (!isMobile.current || !('vibrate' in navigator)) return;
     
-    stopVibration();
+    stopAllVibration();
     
-    const baseDuration = 100;
-    const pauseDuration = 50;
-    const intensityMultiplier = Math.min(Math.max(intensity, 0.2), 1);
-    
-    const pattern = [
-      baseDuration * intensityMultiplier,
-      pauseDuration,
-      baseDuration * intensityMultiplier,
-      pauseDuration,
-      baseDuration * intensityMultiplier
-    ];
-    
-    vibrationInterval.current = setInterval(() => {
+    const pattern = [200, 100]; // Vibrate for 200ms, pause for 100ms
+    speakingVibrationInterval.current = setInterval(() => {
       navigator.vibrate(pattern);
     }, pattern.reduce((a, b) => a + b, 0));
     
     setIsVibrating(true);
-    setVibrationIntensity(intensity);
-  }, [vibrationEnabled]);
+    setIsSomeoneSpeaking(true);
+  }, []);
 
-  const stopVibration = useCallback(() => {
+  // Stop all vibration
+  const stopAllVibration = useCallback(() => {
     if (!isMobile.current || !('vibrate' in navigator)) return;
     
     if (vibrationInterval.current) {
@@ -265,18 +258,29 @@ const SinhalaVoiceResponseSystem = () => {
       vibrationInterval.current = null;
     }
     
+    if (speakingVibrationInterval.current) {
+      clearInterval(speakingVibrationInterval.current);
+      speakingVibrationInterval.current = null;
+    }
+    
     navigator.vibrate(0);
     setIsVibrating(false);
+    setIsSomeoneSpeaking(false);
     setVibrationIntensity(0);
+  }, []);
+
+  // Short vibration feedback
+  const vibrateFeedback = useCallback((duration = 200) => {
+    if (!isMobile.current || !('vibrate' in navigator)) return;
+    navigator.vibrate(duration);
   }, []);
 
   const toggleVibration = () => {
     setVibrationEnabled(prev => {
       if (!prev && isMobile.current && 'vibrate' in navigator) {
-        // Just a quick vibration to indicate it's enabled
-        navigator.vibrate([100]);
+        vibrateFeedback(100);
       } else {
-        stopVibration();
+        stopAllVibration();
       }
       return !prev;
     });
@@ -304,7 +308,7 @@ const SinhalaVoiceResponseSystem = () => {
 
     return () => {
       stopSoundDetection();
-      stopVibration();
+      stopAllVibration();
       if (audioContext) {
         audioContext.close();
       }
@@ -334,18 +338,17 @@ const SinhalaVoiceResponseSystem = () => {
         const average = sum / bufferLength;
         setSoundLevel(average);
         
-        const normalizedLevel = Math.min(average / 100, 1);
-        
         if (average > 20) {
           setIsSoundDetected(true);
-          if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-            startVibration(normalizedLevel);
+          // Start continuous vibration when sound is detected
+          if (isMobile.current && 'vibrate' in navigator && vibrationEnabled && !isSomeoneSpeaking) {
+            startSpeakingVibration();
           }
         } else {
           setIsSoundDetected(false);
-          if (isMobile.current && vibrationEnabled && isSoundDetected) {
-            // Quick vibration when sound stops
-            navigator.vibrate([50]);
+          // Stop continuous vibration when no sound
+          if (isMobile.current && vibrationEnabled && isSomeoneSpeaking) {
+            stopAllVibration();
           }
         }
       }, 50);
@@ -353,16 +356,16 @@ const SinhalaVoiceResponseSystem = () => {
       console.error('Microphone access error:', err);
       setSpeechError('මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අපොහොසත් විය. කරුණාකර මයික්‍රොෆෝන අවසර පරීක්ෂා කරන්න.');
     }
-  }, [analyser, audioContext, vibrationEnabled, startVibration, isSoundDetected]);
+  }, [analyser, audioContext, vibrationEnabled, startSpeakingVibration, stopAllVibration, isSomeoneSpeaking]);
 
   useEffect(() => {
     if (audioContext && analyser && isMobile.current) {
       startSoundDetection();
     } else {
       stopSoundDetection();
-      stopVibration();
+      stopAllVibration();
     }
-  }, [audioContext, analyser, startSoundDetection, stopVibration]);
+  }, [audioContext, analyser, startSoundDetection, stopAllVibration]);
 
   const stopSoundDetection = useCallback(() => {
     if (soundDetectionInterval.current) {
@@ -370,12 +373,12 @@ const SinhalaVoiceResponseSystem = () => {
       soundDetectionInterval.current = null;
     }
     setIsSoundDetected(false);
-    stopVibration();
+    stopAllVibration();
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop());
       mediaStreamRef.current = null;
     }
-  }, [stopVibration]);
+  }, [stopAllVibration]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -391,9 +394,9 @@ const SinhalaVoiceResponseSystem = () => {
         recognitionRef.current.stop();
       }
       window.speechSynthesis.cancel();
-      stopVibration();
+      stopAllVibration();
     };
-  }, [stopVibration]);
+  }, [stopAllVibration]);
 
   const loadChatHistory = () => {
     const savedChats = localStorage.getItem('sinhalaChatHistory');
@@ -565,12 +568,20 @@ const SinhalaVoiceResponseSystem = () => {
   };
 
   const startRecording = async () => {
+    // Stop the continuous vibration when user starts recording
+    if (isSomeoneSpeaking) {
+      stopAllVibration();
+    }
+    
     setSpeechError(null);
     setInputMessage('');
     
     try {
-      // Check for mobile-specific SpeechRecognition API
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = window.SpeechRecognition || 
+                              window.webkitSpeechRecognition || 
+                              window.mozSpeechRecognition || 
+                              window.msSpeechRecognition;
+      
       if (!SpeechRecognition) {
         throw new Error('ඔබගේ බ්‍රව්සරය හඩ හඳුනාගැනීම සඳහා සහාය නොදක්වයි');
       }
@@ -579,11 +590,11 @@ const SinhalaVoiceResponseSystem = () => {
       recognition.lang = 'si-LK';
       recognition.interimResults = false;
       recognition.continuous = false;
+      recognition.maxAlternatives = 1;
 
       recognition.onresult = (event) => {
-        const current = event.resultIndex;
-        const transcript = event.results[current][0].transcript;
-        setInputMessage(prev => prev + ' ' + transcript);
+        const transcript = event.results[0][0].transcript;
+        setInputMessage(prev => prev + transcript);
         setIsSoundDetected(false);
         setIsRecording(false);
         handleSendMessage();
@@ -605,8 +616,9 @@ const SinhalaVoiceResponseSystem = () => {
       recognitionRef.current = recognition;
       setIsRecording(true);
       
+      // Give feedback vibration when recording starts
       if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-        navigator.vibrate([200]);
+        vibrateFeedback(200);
       }
     } catch (err) {
       console.error('Speech recognition initialization error:', err);
@@ -630,14 +642,14 @@ const SinhalaVoiceResponseSystem = () => {
       return;
     }
 
+    // Give feedback vibration when TTS starts
     if (isMobile.current && vibrationEnabled) {
-      startVibration(0.5);
+      vibrateFeedback(200);
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'si-LK';
 
-    // Try to find a Sinhala voice
     const voices = window.speechSynthesis.getVoices();
     const sinhalaVoice = voices.find(voice => 
       voice.lang === 'si-LK' || voice.lang.startsWith('si-')
@@ -646,30 +658,20 @@ const SinhalaVoiceResponseSystem = () => {
     if (sinhalaVoice) {
       utterance.voice = sinhalaVoice;
     } else {
-      // Fallback to any available voice
       utterance.voice = voices.find(voice => voice.lang.includes('en')) || voices[0];
     }
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      if (isMobile.current && vibrationEnabled) {
-        startVibration(0.5);
-      }
     };
     
     utterance.onend = () => {
       setIsSpeaking(false);
-      if (isMobile.current) {
-        stopVibration();
-      }
     };
     
     utterance.onerror = (event) => {
       console.error('Speech error:', event);
       setIsSpeaking(false);
-      if (isMobile.current) {
-        stopVibration();
-      }
       setSpeechError('හඬ පිටකිරීමේ දෝෂයක්: ' + event.error);
     };
 
@@ -679,9 +681,6 @@ const SinhalaVoiceResponseSystem = () => {
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
-    if (isMobile.current) {
-      stopVibration();
-    }
   };
 
   const handleSendMessage = async () => {
@@ -719,7 +718,7 @@ const SinhalaVoiceResponseSystem = () => {
         
         setMessages(prev => [...prev, aiMessage]);
         if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-          navigator.vibrate([200]);
+          vibrateFeedback(200);
         }
         speakText(rememberedResponse.response);
         return;
@@ -740,7 +739,7 @@ const SinhalaVoiceResponseSystem = () => {
         
         setMessages(prev => [...prev, aiMessage]);
         if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-          navigator.vibrate([200]);
+          vibrateFeedback(200);
         }
         speakText(response);
         return;
@@ -798,7 +797,7 @@ const SinhalaVoiceResponseSystem = () => {
     setResponseOptions([]);
     
     if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-      navigator.vibrate([200]);
+      vibrateFeedback(200);
     }
     
     if (!isEdited) {
@@ -885,8 +884,8 @@ const SinhalaVoiceResponseSystem = () => {
       {isSoundDetected && isMobile.current && (
         <div className="sound-detection-indicator">
           <div className="sound-pulse-indicator"></div>
-          {isVibrating ? (
-            `හඩ හඳුනාගෙන ඇත. කම්පනය වේ! (තීව්රතාවය: ${Math.round(vibrationIntensity * 100)}%)`
+          {isSomeoneSpeaking ? (
+            "කෙනෙකු කතා කරමින් ඇත! කතා කිරීමට පටන් ගැනීමට පහත බොත්තම ඔබන්න"
           ) : (
             "හඩ හඳුනාගෙන ඇත. පටන් ගනිමින්..."
           )}
@@ -906,7 +905,7 @@ const SinhalaVoiceResponseSystem = () => {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M17 17V13H19V17H20V13H22V17C22 18.6569 20.6569 20 19 20H5C3.34315 20 2 18.6569 2 17V7C2 5.34315 3.34315 4 5 4H8V7H5V17H19ZM14 5H16V3H14V5ZM11 5H13V3H11V5ZM19 5H22V3H19V5Z" fill="#34A853"/>
             </svg>
-            {isMobile.current && isVibrating && (
+            {isMobile.current && isSomeoneSpeaking && (
               <span className="vibration-active-indicator"></span>
             )}
           </span>
@@ -1128,7 +1127,7 @@ const SinhalaVoiceResponseSystem = () => {
                           title="සංස්කරණය"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M11 4H4C3.44772 4 3 4.44772 3 5V20C3 20.5523 3.44772 21 4 21H19C19.5523 21 20 20.5523 20 20V13M18.4142 3.58579C18.7893 3.21071 19.298 3 19.8284 3C20.3588 3 20.8675 3.21071 21.2426 3.58579C21.6177 3.96086 21.8284 4.46957 21.8284 5C21.8284 5.53043 21.6177 6.03914 21.2426 6.41421L12.7071 14.9497L9 15.8284L9.87868 12.1213L18.4142 3.58579Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M11 4H4C3.44772 4 3 4.44772 3 5V20C3 20.5523 3.44772 21 4 21H19C19.5523 21 20 20.5523 20 20V13M18.4142 3.58579C18.7893 3.21071 19.298 3 19.8284 3C20.3588 3 20.8675 3.21071 21.2426 3.58579C21.6177 3.96086 21.8284 4.46957 21.8284 5C21.8284 5.53043 21.6177 6.03914 21.2426 6.41421L12.7071 14.9497L9 15.8284L9.87868 12.1213L18.4142 3.58579Z" stroke="#5f6368" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                         </button>
                         <button
@@ -1137,7 +1136,7 @@ const SinhalaVoiceResponseSystem = () => {
                           title="මකන්න"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="#5f6368" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                         </button>
                       </div>
@@ -1169,7 +1168,7 @@ const SinhalaVoiceResponseSystem = () => {
             <p className="empty-chat-title">ඔබගේ සංවාදය ආරම්භ කරන්න</p>
             <p className="empty-chat-subtitle">
               {isMobile.current ? 
-                "කතා කිරීම ආරම්භ කරන්න (කම්පනයෙන් දැනුවත් වනු ඇත)" : 
+                "කෙනෙකු කතා කරන විට ඔබගේ දුරකථනය කම්පනය වනු ඇත. පිළිතුරු දීමට පහත බොත්තම ඔබන්න" : 
                 "හඩින් පණිවිඩයක් යැවීමට මයික්‍රොෆෝන බොත්තම ඔබන්න"}
             </p>
           </div>
