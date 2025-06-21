@@ -3,7 +3,7 @@ import SinhalaResponseSystem from './SinhalaVoiceResponseSystem';
 import'./App.css'; // Assuming you have some styles in App.css
 function App() {
   return (
-    <BrowserRouter basename="/Signify">
+    <BrowserRouter basename="/Signify_App">
   <div className="App">
       <SinhalaResponseSystem />
     </div>

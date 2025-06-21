@@ -273,7 +273,8 @@ const SinhalaVoiceResponseSystem = () => {
   const toggleVibration = () => {
     setVibrationEnabled(prev => {
       if (!prev && isMobile.current && 'vibrate' in navigator) {
-        navigator.vibrate([200, 50, 200]);
+        // Just a quick vibration to indicate it's enabled
+        navigator.vibrate([100]);
       } else {
         stopVibration();
       }
@@ -342,8 +343,9 @@ const SinhalaVoiceResponseSystem = () => {
           }
         } else {
           setIsSoundDetected(false);
-          if (isMobile.current && vibrationEnabled) {
-            navigator.vibrate([50, 100, 50]);
+          if (isMobile.current && vibrationEnabled && isSoundDetected) {
+            // Quick vibration when sound stops
+            navigator.vibrate([50]);
           }
         }
       }, 50);
@@ -351,7 +353,7 @@ const SinhalaVoiceResponseSystem = () => {
       console.error('Microphone access error:', err);
       setSpeechError('මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අපොහොසත් විය. කරුණාකර මයික්‍රොෆෝන අවසර පරීක්ෂා කරන්න.');
     }
-  }, [analyser, audioContext, vibrationEnabled, startVibration]);
+  }, [analyser, audioContext, vibrationEnabled, startVibration, isSoundDetected]);
 
   useEffect(() => {
     if (audioContext && analyser && isMobile.current) {
@@ -562,11 +564,12 @@ const SinhalaVoiceResponseSystem = () => {
     setEditedMessageText('');
   };
 
-  const startRecording = () => {
+  const startRecording = async () => {
     setSpeechError(null);
     setInputMessage('');
     
     try {
+      // Check for mobile-specific SpeechRecognition API
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         throw new Error('ඔබගේ බ්‍රව්සරය හඩ හඳුනාගැනීම සඳහා සහාය නොදක්වයි');
@@ -587,6 +590,7 @@ const SinhalaVoiceResponseSystem = () => {
       };
 
       recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
         setSpeechError(`හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`);
         setIsSoundDetected(false);
         setIsRecording(false);
@@ -602,9 +606,10 @@ const SinhalaVoiceResponseSystem = () => {
       setIsRecording(true);
       
       if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-        navigator.vibrate([200, 50, 200]);
+        navigator.vibrate([200]);
       }
     } catch (err) {
+      console.error('Speech recognition initialization error:', err);
       setSpeechError(err.message);
       setIsSoundDetected(false);
       setIsRecording(false);
@@ -632,6 +637,7 @@ const SinhalaVoiceResponseSystem = () => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'si-LK';
 
+    // Try to find a Sinhala voice
     const voices = window.speechSynthesis.getVoices();
     const sinhalaVoice = voices.find(voice => 
       voice.lang === 'si-LK' || voice.lang.startsWith('si-')
@@ -639,6 +645,9 @@ const SinhalaVoiceResponseSystem = () => {
 
     if (sinhalaVoice) {
       utterance.voice = sinhalaVoice;
+    } else {
+      // Fallback to any available voice
+      utterance.voice = voices.find(voice => voice.lang.includes('en')) || voices[0];
     }
 
     utterance.onstart = () => {
@@ -710,7 +719,7 @@ const SinhalaVoiceResponseSystem = () => {
         
         setMessages(prev => [...prev, aiMessage]);
         if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-          navigator.vibrate([200, 50, 200]);
+          navigator.vibrate([200]);
         }
         speakText(rememberedResponse.response);
         return;
@@ -731,7 +740,7 @@ const SinhalaVoiceResponseSystem = () => {
         
         setMessages(prev => [...prev, aiMessage]);
         if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-          navigator.vibrate([200, 50, 200]);
+          navigator.vibrate([200]);
         }
         speakText(response);
         return;
@@ -789,7 +798,7 @@ const SinhalaVoiceResponseSystem = () => {
     setResponseOptions([]);
     
     if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-      navigator.vibrate([200, 50, 200]);
+      navigator.vibrate([200]);
     }
     
     if (!isEdited) {
