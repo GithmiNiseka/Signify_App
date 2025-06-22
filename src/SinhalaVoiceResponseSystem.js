@@ -13,32 +13,6 @@ const COMMON_QUESTIONS = [
   'ලිපිනය', 'ඔබගේ ලිපිනය', 'ඔයාගේ ලිපිනය'
 ];
 
-const QUESTION_TYPES = {
-  NAME: 'name',
-  AGE: 'age',
-  ADDRESS: 'address',
-  ALLERGY: 'allergy'
-};
-
-const getQuestionType = (question) => {
-  const lowerQuestion = question.toLowerCase();
-  
-  if (lowerQuestion.includes('නම') || lowerQuestion.includes('කවුද')) {
-    return QUESTION_TYPES.NAME;
-  }
-  if (lowerQuestion.includes('වයස') || lowerQuestion.includes('ජන්මය')) {
-    return QUESTION_TYPES.AGE;
-  }
-  if (lowerQuestion.includes('ගම') || lowerQuestion.includes('ලිපිනය') || lowerQuestion.includes('ජීවත්')) {
-    return QUESTION_TYPES.ADDRESS;
-  }
-  if (lowerQuestion.includes('ඇලර්ජි') || lowerQuestion.includes('අසාත්මිකතා')) {
-    return QUESTION_TYPES.ALLERGY;
-  }
-  
-  return null;
-};
-
 const SinhalaVoiceResponseSystem = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -57,14 +31,17 @@ const SinhalaVoiceResponseSystem = () => {
   
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
+  
+  // Vibration state and ref
+  const [isVibrating, setIsVibrating] = useState(false);
+  const vibrationIntervalRef = useRef(null);
+  const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
   const [userMemory, setUserMemory] = useState(() => {
     const savedMemory = localStorage.getItem('userMemory');
     return savedMemory ? JSON.parse(savedMemory) : {
       questions: {},
-      answerCounts: {},
-      questionTypes: {},
-      typeAnswerCounts: {}
+      answerCounts: {}
     };
   });
 
@@ -92,8 +69,28 @@ const SinhalaVoiceResponseSystem = () => {
         recognitionRef.current.stop();
       }
       window.speechSynthesis.cancel();
+      stopVibration(); // Clean up vibration on unmount
     };
   }, []);
+
+  // Vibration functions
+  const startVibration = () => {
+    if (!isMobile || !('vibrate' in navigator)) return;
+    
+    setIsVibrating(true);
+    // Vibrate pattern: 200ms vibration, 100ms pause, repeat
+    vibrationIntervalRef.current = setInterval(() => {
+      navigator.vibrate(200);
+    }, 300);
+  };
+
+  const stopVibration = () => {
+    if (!isMobile || !('vibrate' in navigator)) return;
+    
+    clearInterval(vibrationIntervalRef.current);
+    navigator.vibrate(0); // Stop any ongoing vibration
+    setIsVibrating(false);
+  };
 
   const loadChatHistory = () => {
     const savedChats = localStorage.getItem('sinhalaChatHistory');
@@ -153,9 +150,6 @@ const SinhalaVoiceResponseSystem = () => {
   };
 
   const getRememberedResponse = (question) => {
-    const questionType = getQuestionType(question);
-    
-    // First check for exact question match
     if (userMemory.questions && userMemory.questions[question]) {
       return {
         response: userMemory.questions[question],
@@ -163,7 +157,6 @@ const SinhalaVoiceResponseSystem = () => {
       };
     }
     
-    // Then check for similar questions
     for (const rememberedQuestion in userMemory.questions || {}) {
       if (isSimilarQuestion(question, rememberedQuestion)) {
         return {
@@ -171,15 +164,6 @@ const SinhalaVoiceResponseSystem = () => {
           isRemembered: true
         };
       }
-    }
-    
-    // Then check for question type match
-    if (questionType && userMemory.questionTypes && userMemory.questionTypes[questionType]) {
-      return {
-        response: userMemory.questionTypes[questionType],
-        isRemembered: true,
-        isTypeResponse: true
-      };
     }
     
     return null;
@@ -258,7 +242,6 @@ const SinhalaVoiceResponseSystem = () => {
       const questionIndex = messages.findIndex(msg => msg.id < editingMessageId && msg.sender === 'user');
       if (questionIndex !== -1) {
         const question = messages[questionIndex].text;
-        const questionType = getQuestionType(question);
         
         setUserMemory(prev => ({
           ...prev,
@@ -269,17 +252,7 @@ const SinhalaVoiceResponseSystem = () => {
           answerCounts: {
             ...(prev.answerCounts || {}),
             [question]: 3
-          },
-          ...(questionType ? {
-            questionTypes: {
-              ...(prev.questionTypes || {}),
-              [questionType]: editedMessageText
-            },
-            typeAnswerCounts: {
-              ...(prev.typeAnswerCounts || {}),
-              [questionType]: 3
-            }
-          } : {})
+          }
         }));
       }
     }
@@ -308,24 +281,33 @@ const SinhalaVoiceResponseSystem = () => {
         const transcript = event.results[current][0].transcript;
         setInputMessage(prev => prev + ' ' + transcript);
         setIsRecording(false);
+        stopVibration(); // Stop vibration when speech is recognized
         handleSendMessage();
       };
 
       recognition.onerror = (event) => {
         setSpeechError(`හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`);
         setIsRecording(false);
+        stopVibration(); // Stop vibration on error
       };
 
       recognition.onend = () => {
         setIsRecording(false);
+        stopVibration(); // Stop vibration when recognition ends
       };
 
       recognition.start();
       recognitionRef.current = recognition;
       setIsRecording(true);
+      
+      // Start vibration when recording starts (for mobile)
+      if (isMobile) {
+        startVibration();
+      }
     } catch (err) {
       setSpeechError(err.message);
       setIsRecording(false);
+      stopVibration(); // Stop vibration on error
     }
   };
 
@@ -333,6 +315,7 @@ const SinhalaVoiceResponseSystem = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsRecording(false);
+      stopVibration(); // Stop vibration when recording stops manually
     }
   };
 
@@ -356,16 +339,28 @@ const SinhalaVoiceResponseSystem = () => {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
+      // Start vibration when speech starts (for mobile)
+      if (isMobile && !isRecording) {
+        startVibration();
+      }
     };
     
     utterance.onend = () => {
       setIsSpeaking(false);
+      // Stop vibration when speech ends (for mobile)
+      if (isMobile && !isRecording) {
+        stopVibration();
+      }
     };
     
     utterance.onerror = (event) => {
       console.error('Speech error:', event);
       setIsSpeaking(false);
       setSpeechError('හඬ පිටකිරීමේ දෝෂයක්: ' + event.error);
+      // Stop vibration on error (for mobile)
+      if (isMobile) {
+        stopVibration();
+      }
     };
 
     window.speechSynthesis.speak(utterance);
@@ -374,6 +369,10 @@ const SinhalaVoiceResponseSystem = () => {
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
+    // Stop vibration when speaking stops (for mobile)
+    if (isMobile) {
+      stopVibration();
+    }
   };
 
   const handleSendMessage = async () => {
@@ -398,24 +397,37 @@ const SinhalaVoiceResponseSystem = () => {
 
     try {
       const rememberedResponse = getRememberedResponse(inputMessage);
-      const questionType = getQuestionType(inputMessage);
       
-      // For common questions, always show options even if remembered
-      const isCommon = isCommonQuestion(inputMessage);
-      
-      if (rememberedResponse && !isCommon) {
+      if (rememberedResponse) {
         const aiMessage = {
           id: Date.now(),
           text: rememberedResponse.response,
           sender: 'ai',
           isSignResponse: true,
           isRemembered: rememberedResponse.isRemembered,
-          isTypeResponse: rememberedResponse.isTypeResponse,
           timestamp: new Date().toLocaleTimeString()
         };
         
         setMessages(prev => [...prev, aiMessage]);
         speakText(rememberedResponse.response);
+        return;
+      }
+
+      const isPersonalDetailQuestion = isCommonQuestion(inputMessage);
+      
+      if (isPersonalDetailQuestion && userMemory.name) {
+        const response = `මගේ නම ${userMemory.name}`;
+        const aiMessage = {
+          id: Date.now(),
+          text: response,
+          sender: 'ai',
+          isSignResponse: true,
+          isRemembered: true,
+          timestamp: new Date().toLocaleTimeString()
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+        speakText(response);
         return;
       }
 
@@ -477,10 +489,8 @@ const SinhalaVoiceResponseSystem = () => {
     const userMessage = messages[messages.length - 1]?.text;
     
     if (userMessage) {
-      const questionType = getQuestionType(userMessage);
-      const shouldRemember = isCommonQuestion(userMessage) || questionType;
+      const shouldRemember = isCommonQuestion(userMessage);
       
-      // Check if this is a name response to store the name
       const nameMatch = response.match(/මගේ නම (.+?) /) || 
                        response.match(/මම (.+?) /) ||
                        response.match(/මගේ නම (.+?)\./);
@@ -496,25 +506,11 @@ const SinhalaVoiceResponseSystem = () => {
           answerCounts: {
             ...(prev.answerCounts || {}),
             [userMessage]: 3
-          },
-          ...(questionType ? {
-            questionTypes: {
-              ...(prev.questionTypes || {}),
-              [questionType]: response
-            },
-            typeAnswerCounts: {
-              ...(prev.typeAnswerCounts || {}),
-              [questionType]: 3
-            }
-          } : {})
+          }
         }));
       } else {
         const currentCount = (userMemory.answerCounts && userMemory.answerCounts[userMessage]) || 0;
         const newCount = currentCount + 1;
-        
-        const currentTypeCount = questionType ? 
-          (userMemory.typeAnswerCounts && userMemory.typeAnswerCounts[questionType]) || 0 : 0;
-        const newTypeCount = currentTypeCount + 1;
         
         if (shouldRemember || newCount >= 3) {
           setUserMemory(prev => ({
@@ -526,17 +522,7 @@ const SinhalaVoiceResponseSystem = () => {
             answerCounts: {
               ...(prev.answerCounts || {}),
               [userMessage]: newCount
-            },
-            ...(questionType && newTypeCount >= 3 ? {
-              questionTypes: {
-                ...(prev.questionTypes || {}),
-                [questionType]: response
-              },
-              typeAnswerCounts: {
-                ...(prev.typeAnswerCounts || {}),
-                [questionType]: newTypeCount
-              }
-            } : {})
+            }
           }));
         } else {
           setUserMemory(prev => ({
@@ -544,13 +530,7 @@ const SinhalaVoiceResponseSystem = () => {
             answerCounts: {
               ...(prev.answerCounts || {}),
               [userMessage]: newCount
-            },
-            ...(questionType ? {
-              typeAnswerCounts: {
-                ...(prev.typeAnswerCounts || {}),
-                [questionType]: newTypeCount
-              }
-            } : {})
+            }
           }));
         }
       }
@@ -575,9 +555,7 @@ const SinhalaVoiceResponseSystem = () => {
     if (window.confirm('ඔබට මතකයේ ඇති සියලුම තොරතුරු මකා දැමීමට අවශ්‍යද?')) {
       setUserMemory({
         questions: {},
-        answerCounts: {},
-        questionTypes: {},
-        typeAnswerCounts: {}
+        answerCounts: {}
       });
     }
   };
@@ -782,7 +760,7 @@ const SinhalaVoiceResponseSystem = () => {
                           title="සංස්කරණය"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M11 4H4C3.44772 4 3 4.44772 3 5V20C3 20.5523 3.44772 21 4 21H19C19.5523 21 20 20.5523 20 20V13M18.4142 3.58579C18.7893 3.21071 19.298 3 19.8284 3C20.3588 3 20.8675 3.21071 21.2426 3.58579C21.6177 3.96086 21.8284 4.46957 21.8284 5C21.8284 5.53043 21.6177 6.03914 21.2426 6.41421L12.7071 14.9497L9 15.8284L9.87868 12.1213L18.4142 3.58579Z" stroke="#5f6368" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M11 4H4C3.44772 4 3 4.44772 3 5V20C3 20.5523 3.44772 21 4 21H19C19.5523 21 20 20.5523 20 20V13M18.4142 3.58579C18.7893 3.21071 19.298 3 19.8284 3C20.3588 3 20.8675 3.21071 21.2426 3.58579C21.6177 3.96086 21.8284 4.46957 21.8284 5C21.8284 5.53043 21.6177 6.03914 21.2426 6.41421L12.7071 14.9497L9 15.8284L9.87868 12.1213L18.4142 3.58579Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                         </button>
                         <button
@@ -791,32 +769,12 @@ const SinhalaVoiceResponseSystem = () => {
                           title="මකන්න"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="#5f6368" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                         </button>
                       </div>
                     </React.Fragment>
                   )}
-                </div>
-              ))}
-            </div>
-          )}
-          
-          <h4>ප්‍රශ්න වර්ග අනුව මතකගත පිළිතුරු:</h4>
-          
-          {(!userMemory.questionTypes || Object.keys(userMemory.questionTypes).length === 0) ? (
-            <div className="empty-state">
-              ප්‍රශ්න වර්ග අනුව මතකගත පිළිතුරු නොමැත
-            </div>
-          ) : (
-            <div className="memory-list">
-              {Object.entries(userMemory.questionTypes || {}).map(([type, response]) => (
-                <div key={type} className="memory-item-container">
-                  <div className="memory-item-question">ප්‍රශ්න වර්ගය: {type}</div>
-                  <div className="memory-item-response">පිළිතුර: {response}</div>
-                  <div className="memory-item-count">
-                    තෝරාගත් ගණන: {userMemory.typeAnswerCounts?.[type] || 0}
-                  </div>
                 </div>
               ))}
             </div>
