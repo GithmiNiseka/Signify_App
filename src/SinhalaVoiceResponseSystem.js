@@ -76,7 +76,7 @@ const SinhalaVoiceResponseSystem = () => {
       }
       window.speechSynthesis.cancel();
       stopVibration();
-      stopSoundDetection(); // Clean up sound detection on unmount
+      stopSoundDetection();
     };
   }, []);
 
@@ -129,15 +129,15 @@ const SinhalaVoiceResponseSystem = () => {
         }
         const average = sum / bufferLength;
         
-        // If sound is detected above threshold
-        if (average > 20 && !isRecording) { // Adjust threshold as needed
+        // If sound is detected above threshold and not already recording
+        if (average > 20 && !isRecording) {
           setSoundDetected(true);
           startVibration();
         } else if (soundDetected) {
           setSoundDetected(false);
           stopVibration();
         }
-      }, 100); // Check every 100ms
+      }, 100);
       
     } catch (err) {
       console.error('Error initializing sound detection:', err);
@@ -357,7 +357,6 @@ const SinhalaVoiceResponseSystem = () => {
         const transcript = event.results[current][0].transcript;
         setInputMessage(prev => prev + ' ' + transcript);
         setIsRecording(false);
-        stopVibration();
         handleSendMessage();
       };
 
@@ -375,6 +374,7 @@ const SinhalaVoiceResponseSystem = () => {
       recognition.start();
       recognitionRef.current = recognition;
       setIsRecording(true);
+      stopVibration(); // Stop vibration immediately after starting recording
       
     } catch (err) {
       setSpeechError(err.message);
