@@ -1,164 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-
-// Import your sign database and images
-import cold from './assets/ssl/Cold.jpeg';
-import wound from './assets/ssl/Wound.jpeg';
-import headache from './assets/ssl/Headache.jpeg';
-import fever from './assets/ssl/Fever.jpeg';
-import future from './assets/ssl/Future.jpeg';
-import knee from './assets/ssl/Knee.jpeg';
-import always from './assets/ssl/Always.jpeg';
-import chestPain from './assets/ssl/chest pain .jpeg';
-import chickenpox from './assets/ssl/ChickenPox.jpeg';
-import cough from './assets/ssl/Cough.jpeg';
-import december from './assets/ssl/December.jpeg';
-import everyday from './assets/ssl/Everyday.jpeg';
-import faint from './assets/ssl/Faint.jpeg';
-import legs from './assets/ssl/legs.jpeg';
-import mumps from './assets/ssl/Mumps.jpeg';
-import november from './assets/ssl/November.jpeg';
-import october from './assets/ssl/October.jpeg';
-import september from './assets/ssl/September.jpeg';
-import term from './assets/ssl/Term.jpeg';
-import virus from './assets/ssl/Virus.jpeg';
-
-// Create your sign database
-const signDatabase = {
-  "cold": {
-    sinhala: "සෙම්ප්‍රතික්ශාව",
-    image: cold
-  },
-  "wound": {
-    sinhala: "තුවාල",
-    image: wound
-  },
-  "headache": {
-    sinhala: "හිසරදයක්",
-    image: headache
-  },
-  "fever": {
-    sinhala: "උණ",
-    image: fever
-  },
-  "future": {
-    sinhala: "අනාගතය",
-    image: future
-  },
-  "knee": {
-    sinhala: "දණහිස",
-    image: knee
-  },
-  "always": {
-    sinhala: "සැමවිටම",
-    image: always
-  },
-  "chestPain": {
-    sinhala: "පපුවේ වේදනාව",
-    image: chestPain
-  },
-  "chickenpox": {
-    sinhala: "පපුවේ පැපොල",
-    image: chickenpox
-  },
-  "cough": {
-    sinhala: "කැස්ස",
-    image: cough
-  },
-  "december": {
-    sinhala: "දෙසැම්බර්",
-    image: december
-  },
-  "everyday": {
-    sinhala: "සෑම දිනම",
-    image: everyday
-  },
-  "faint": {
-    sinhala: "ක්ලාන්ත",
-    image: faint
-  },
-  "legs": {
-    sinhala: "කකුල්",
-    image: legs
-  },
-  "mumps": {
-    sinhala: "කම්මුල්ගාය",
-    image: mumps
-  },
-  "november": {
-    sinhala: "නොවැම්බර්",
-    image: november
-  },
-  "october": {
-    sinhala: "ඔක්තෝබර්",
-    image: october
-  },
-  "september": {
-    sinhala: "සැප්තැම්බර්",
-    image: september
-  },
-  "term": {
-    sinhala: "වාරය",
-    image: term
-  },
-  "virus": {
-    sinhala: "වයිරසය",
-    image: virus
-  },
-};
-
-const sinhalaSignMap = {};
-Object.values(signDatabase).forEach(item => {
-  sinhalaSignMap[item.sinhala] = item.image;
-});
-
-// Create a component to render text with sign images
-const SignResponse = ({ text }) => {
-  const tokens = text.split(/([\s,.!?]+)/).filter(token => token.trim().length > 0 || token.match(/[\s,.!?]/));
-
-  return (
-    <div className="sign-response-container">
-      {tokens.map((token, index) => {
-        if (token.match(/^[\s,.!?]+$/)) {
-          return (
-            <span key={index} className="whitespace">
-              {token}
-            </span>
-          );
-        }
-
-        const signData = Object.entries(signDatabase).find(([key, value]) => 
-          value.sinhala === token || key.toLowerCase() === token.toLowerCase()
-        );
-
-        if (signData) {
-          const [key, value] = signData;
-          return (
-            <div key={index} className="sign-token-container">
-              <div className="sign-image-container">
-                <img 
-                  src={value.image} 
-                  alt={`Sign for ${value.sinhala}`} 
-                  className="sign-image"
-                />
-                <div className="sign-word-label">
-                  <span className="sinhala-word">{value.sinhala}</span>
-                  <span className="translation">{key}</span>
-                </div>
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <span key={index} className="regular-word">
-            {token}
-          </span>
-        );
-      })}
-    </div>
-  );
-};
+import SignResponse from './SignResponse';
 
 export const GEMINI_API_KEY = 'AIzaSyC-FN_icIcRzJvxOo0bsVSb5FRgUv_2fT0';
 export const GEMINI_MODEL = 'gemini-1.5-flash-latest';
@@ -205,171 +47,6 @@ const SinhalaVoiceResponseSystem = () => {
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editedMessageText, setEditedMessageText] = useState('');
 
-  const [audioContext, setAudioContext] = useState(null);
-  const [analyser, setAnalyser] = useState(null);
-  const [isSoundDetected, setIsSoundDetected] = useState(false);
-  const [soundLevel, setSoundLevel] = useState(0);
-  const soundDetectionInterval = useRef(null);
-  const mediaStreamRef = useRef(null);
-  
-  const [isVibrating, setIsVibrating] = useState(false);
-  const [vibrationIntensity, setVibrationIntensity] = useState(0);
-  const [vibrationEnabled, setVibrationEnabled] = useState(true);
-  const vibrationInterval = useRef(null);
-
-  const isMobile = useRef(window.innerWidth <= 768);
-
-  useEffect(() => {
-    const handleResize = () => {
-      isMobile.current = window.innerWidth <= 768;
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const startVibration = useCallback((intensity = 1) => {
-    if (!isMobile.current || !('vibrate' in navigator) || !vibrationEnabled) return;
-    
-    stopVibration();
-    
-    const baseDuration = 100;
-    const pauseDuration = 50;
-    const intensityMultiplier = Math.min(Math.max(intensity, 0.2), 1);
-    
-    const pattern = [
-      baseDuration * intensityMultiplier,
-      pauseDuration,
-      baseDuration * intensityMultiplier,
-      pauseDuration,
-      baseDuration * intensityMultiplier
-    ];
-    
-    vibrationInterval.current = setInterval(() => {
-      navigator.vibrate(pattern);
-    }, pattern.reduce((a, b) => a + b, 0));
-    
-    setIsVibrating(true);
-    setVibrationIntensity(intensity);
-  }, [vibrationEnabled]);
-
-  const stopVibration = useCallback(() => {
-    if (!isMobile.current || !('vibrate' in navigator)) return;
-    
-    if (vibrationInterval.current) {
-      clearInterval(vibrationInterval.current);
-      vibrationInterval.current = null;
-    }
-    
-    navigator.vibrate(0);
-    setIsVibrating(false);
-    setVibrationIntensity(0);
-  }, []);
-
-  const toggleVibration = () => {
-    setVibrationEnabled(prev => {
-      if (!prev && isMobile.current && 'vibrate' in navigator) {
-        navigator.vibrate([100]);
-      } else {
-        stopVibration();
-      }
-      return !prev;
-    });
-  };
-
-  const stopSoundDetection = useCallback(() => {
-    if (soundDetectionInterval.current) {
-      clearInterval(soundDetectionInterval.current);
-      soundDetectionInterval.current = null;
-    }
-    setIsSoundDetected(false);
-    stopVibration();
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
-  }, [stopVibration]);
-
-  const startSoundDetection = useCallback(async () => {
-    try {
-      stopSoundDetection();
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-
-      const microphone = audioContext.createMediaStreamSource(stream);
-      microphone.connect(analyser);
-      
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      
-      soundDetectionInterval.current = setInterval(() => {
-        analyser.getByteFrequencyData(dataArray);
-        
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const average = sum / bufferLength;
-        setSoundLevel(average);
-        
-        const normalizedLevel = Math.min(average / 100, 1);
-        
-        if (average > 20) {
-          setIsSoundDetected(true);
-          if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-            startVibration(normalizedLevel);
-          }
-        } else {
-          setIsSoundDetected(false);
-          if (isMobile.current && vibrationEnabled && isSoundDetected) {
-            navigator.vibrate([50]);
-          }
-        }
-      }, 50);
-    } catch (err) {
-      console.error('Microphone access error:', err);
-      setSpeechError('මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අපොහොසත් විය. කරුණාකර මයික්‍රොෆෝන අවසර පරීක්ෂා කරන්න.');
-    }
-  }, [analyser, audioContext, vibrationEnabled, startVibration, isSoundDetected, stopSoundDetection]);
-
-  useEffect(() => {
-    setSpeechSupported('speechSynthesis' in window);
-    loadChatHistory();
-
-    const initAudioContext = async () => {
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const context = new AudioContext();
-        setAudioContext(context);
-        
-        const newAnalyser = context.createAnalyser();
-        newAnalyser.fftSize = 256;
-        setAnalyser(newAnalyser);
-      } catch (err) {
-        console.error('Audio Context error:', err);
-      }
-    };
-
-    initAudioContext();
-
-    return () => {
-      stopSoundDetection();
-      stopVibration();
-      if (audioContext) {
-        audioContext.close();
-      }
-    };
-  }, [stopSoundDetection, stopVibration]);
-
-  useEffect(() => {
-    if (audioContext && analyser && isMobile.current) {
-      startSoundDetection();
-    } else {
-      stopSoundDetection();
-      stopVibration();
-    }
-  }, [audioContext, analyser, startSoundDetection, stopSoundDetection, stopVibration]);
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, responseOptions]);
@@ -379,14 +56,16 @@ const SinhalaVoiceResponseSystem = () => {
   }, [userMemory]);
 
   useEffect(() => {
+    setSpeechSupported('speechSynthesis' in window);
+    loadChatHistory();
+
     return () => {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
       window.speechSynthesis.cancel();
-      stopVibration();
     };
-  }, [stopVibration]);
+  }, []);
 
   const loadChatHistory = () => {
     const savedChats = localStorage.getItem('sinhalaChatHistory');
@@ -557,7 +236,10 @@ const SinhalaVoiceResponseSystem = () => {
     setEditedMessageText('');
   };
 
-  const initializeSpeechRecognition = () => {
+  const startRecording = () => {
+    setSpeechError(null);
+    setInputMessage('');
+    
     try {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
@@ -568,78 +250,29 @@ const SinhalaVoiceResponseSystem = () => {
       recognition.lang = 'si-LK';
       recognition.interimResults = false;
       recognition.continuous = false;
-      recognition.maxAlternatives = 1;
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-        setIsSoundDetected(false);
-      };
 
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
+        const current = event.resultIndex;
+        const transcript = event.results[current][0].transcript;
         setInputMessage(prev => prev + ' ' + transcript);
         setIsRecording(false);
         handleSendMessage();
       };
 
       recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        let errorMessage = `හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`;
-        
-        if (event.error === 'not-allowed') {
-          errorMessage = 'මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අවසර නැත. කරුණාකර අවසර ලබා දෙන්න.';
-        } else if (event.error === 'no-speech') {
-          errorMessage = 'කිසිදු හඩක් හඳුනාගත නොහැකි විය. නැවත උත්සාහ කරන්න.';
-        }
-        
-        setSpeechError(errorMessage);
+        setSpeechError(`හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`);
         setIsRecording(false);
-        setIsSoundDetected(false);
       };
 
       recognition.onend = () => {
         setIsRecording(false);
-        setIsSoundDetected(false);
       };
 
-      return recognition;
-    } catch (err) {
-      console.error('Speech recognition initialization error:', err);
-      setSpeechError(err.message);
-      setIsRecording(false);
-      setIsSoundDetected(false);
-      return null;
-    }
-  };
-
-  const startRecording = async () => {
-    setSpeechError(null);
-    setInputMessage('');
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      
-      const recognition = initializeSpeechRecognition();
-      if (!recognition) return;
-      
+      recognition.start();
       recognitionRef.current = recognition;
-      
-      setTimeout(() => {
-        try {
-          recognition.start();
-          if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-            navigator.vibrate([200]);
-          }
-        } catch (err) {
-          console.error('Error starting recognition:', err);
-          setSpeechError('හඩ හඳුනාගැනීම ආරම්භ කිරීමට නොහැකි විය. නැවත උත්සාහ කරන්න.');
-          setIsRecording(false);
-        }
-      }, 100);
+      setIsRecording(true);
     } catch (err) {
-      console.error('Microphone permission error:', err);
-      setSpeechError('මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අවසර නැත. කරුණාකර අවසර ලබා දෙන්න.');
+      setSpeechError(err.message);
       setIsRecording(false);
     }
   };
@@ -648,7 +281,6 @@ const SinhalaVoiceResponseSystem = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsRecording(false);
-      setIsSoundDetected(false);
     }
   };
 
@@ -656,10 +288,6 @@ const SinhalaVoiceResponseSystem = () => {
     if (!speechSupported) {
       alert('ඔබගේ බ්‍රව්සරය හඬ පිටකිරීම සඳහා සහාය නොදක්වයි');
       return;
-    }
-
-    if (isMobile.current && vibrationEnabled) {
-      startVibration(0.5);
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
@@ -672,30 +300,19 @@ const SinhalaVoiceResponseSystem = () => {
 
     if (sinhalaVoice) {
       utterance.voice = sinhalaVoice;
-    } else {
-      utterance.voice = voices.find(voice => voice.lang.includes('en')) || voices[0];
     }
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      if (isMobile.current && vibrationEnabled) {
-        startVibration(0.5);
-      }
     };
     
     utterance.onend = () => {
       setIsSpeaking(false);
-      if (isMobile.current) {
-        stopVibration();
-      }
     };
     
     utterance.onerror = (event) => {
       console.error('Speech error:', event);
       setIsSpeaking(false);
-      if (isMobile.current) {
-        stopVibration();
-      }
       setSpeechError('හඬ පිටකිරීමේ දෝෂයක්: ' + event.error);
     };
 
@@ -705,9 +322,6 @@ const SinhalaVoiceResponseSystem = () => {
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
-    if (isMobile.current) {
-      stopVibration();
-    }
   };
 
   const handleSendMessage = async () => {
@@ -744,9 +358,6 @@ const SinhalaVoiceResponseSystem = () => {
         };
         
         setMessages(prev => [...prev, aiMessage]);
-        if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-          navigator.vibrate([200]);
-        }
         speakText(rememberedResponse.response);
         return;
       }
@@ -765,9 +376,6 @@ const SinhalaVoiceResponseSystem = () => {
         };
         
         setMessages(prev => [...prev, aiMessage]);
-        if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-          navigator.vibrate([200]);
-        }
         speakText(response);
         return;
       }
@@ -822,10 +430,6 @@ const SinhalaVoiceResponseSystem = () => {
     
     setMessages(prev => [...prev, aiMessage]);
     setResponseOptions([]);
-    
-    if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-      navigator.vibrate([200]);
-    }
     
     if (!isEdited) {
       speakText(response);
@@ -907,44 +511,6 @@ const SinhalaVoiceResponseSystem = () => {
 
   return (
     <div className="sinhala-chat-app">
-      {/* Sound detection indicator */}
-      {isSoundDetected && isMobile.current && (
-        <div className="sound-detection-indicator">
-          <div className="sound-pulse-indicator"></div>
-          {isVibrating ? (
-            `හඩ හඳුනාගෙන ඇත. කම්පනය වේ! (තීව්රතාවය: ${Math.round(vibrationIntensity * 100)}%)`
-          ) : (
-            "හඩ හඳුනාගෙන ඇත. පටන් ගනිමින්..."
-          )}
-          <div className="sound-level-bar">
-            <div 
-              className="sound-level-fill" 
-              style={{ width: `${Math.min(soundLevel, 100)}%` }}
-            ></div>
-          </div>
-        </div>
-      )}
-
-      {/* Vibration support indicator */}
-      <div className="vibration-support-indicator">
-        {('vibrate' in navigator) ? (
-          <span title="කම්පන සහාය ඇත">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M17 17V13H19V17H20V13H22V17C22 18.6569 20.6569 20 19 20H5C3.34315 20 2 18.6569 2 17V7C2 5.34315 3.34315 4 5 4H8V7H5V17H19ZM14 5H16V3H14V5ZM11 5H13V3H11V5ZM19 5H22V3H19V5Z" fill="#34A853"/>
-            </svg>
-            {isMobile.current && isVibrating && (
-              <span className="vibration-active-indicator"></span>
-            )}
-          </span>
-        ) : (
-          <span title="කම්පන සහාය නැත">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M17 17V13H19V17H20V13H22V17C22 18.6569 20.6569 20 19 20H5C3.34315 20 2 18.6569 2 17V7C2 5.34315 3.34315 4 5 4H8V7H5V17H19ZM14 5H16V3H14V5ZM11 5H13V3H11V5ZM19 5H22V3H19V5ZM8 17V13H10V17H8Z" fill="#EA4335"/>
-            </svg>
-          </span>
-        )}
-      </div>
-
       {/* Chat Header */}
       <div className="chat-header">
         <h1>SIGNIFY</h1>
@@ -956,9 +522,9 @@ const SinhalaVoiceResponseSystem = () => {
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M3 12V15C3 16.6569 4.34315 18 6 18H8L12 22V2L8 6H6C4.34315 6 3 7.34315 3 9V12Z" fill="currentColor"/>
-              <path d="M16.5 12C16.5 10.067 15.037 8.5 13 8.5M19 12C19 8.13401 15.866 5 12 5M15.5 12C15.5 13.933 16.963 15.5 19 15.5M21 12C21 15.866 17.866 19 14 19" stroke="#4285F4" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M16.5 12C16.5 10.067 15.037 8.5 13 8.5M19 12C19 8.13401 15.866 5 12 5M15.5 12C15.5 13.933 16.963 15.5 19 15.5M21 12C21 15.866 17.866 19 14 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
-            {!isMobile.current && 'ඉතිහාසය'}
+            {window.innerWidth > 768 && 'ඉතිහාසය'}
           </button>
           {messages.length > 0 && (
             <>
@@ -971,7 +537,7 @@ const SinhalaVoiceResponseSystem = () => {
                   <path d="M5 3H16.1716L19 5.82843V19C19 20.1046 18.1046 21 17 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   <path d="M12 3V9H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                {!isMobile.current && 'සුරකින්න'}
+                {window.innerWidth > 768 && 'සුරකින්න'}
               </button>
               <button 
                 onClick={clearCurrentChat}
@@ -981,7 +547,7 @@ const SinhalaVoiceResponseSystem = () => {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M19 7L18.1327 19.1425C18.0579 20.1891 17.187 21 16.1378 21H7.86224C6.81296 21 5.94208 20.1891 5.86732 19.1425L5 7M10 11V17M14 11V17M15 7V4C15 3.44772 14.5523 3 14 3H10C9.44772 3 9 3.44772 9 4V7M4 7H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                {!isMobile.current && 'මකන්න'}
+                {window.innerWidth > 768 && 'මකන්න'}
               </button>
             </>
           )}
@@ -993,18 +559,7 @@ const SinhalaVoiceResponseSystem = () => {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M9 12H15M9 16H15M10 5H14C14.5523 5 15 4.55228 15 4V3.5C15 3.22386 14.7761 3 9.5 3C9.22386 3 9 3.22386 9 3.5V4C9 4.55228 9.44772 5 10 5ZM7 21H17C18.1046 21 19 20.1046 19 19V9C19 7.89543 18.1046 7 17 7H7C5.89543 7 5 7.89543 5 9V19C5 20.1046 5.89543 21 7 21Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            {!isMobile.current && 'මතකය'}
-          </button>
-          {/* Vibration toggle button */}
-          <button 
-            onClick={toggleVibration}
-            className={`vibration-button ${vibrationEnabled ? 'active' : ''}`}
-            title="කම්පන සහාය"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M17 17V13H19V17H20V13H22V17C22 18.6569 20.6569 20 19 20H5C3.34315 20 2 18.6569 2 17V7C2 5.34315 3.34315 4 5 4H8V7H5V17H19ZM14 5H16V3H14V5ZM11 5H13V3H11V5ZM19 5H22V3H19V5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            {!isMobile.current && 'කම්පන'}
+            {window.innerWidth > 768 && 'මතකය'}
           </button>
         </div>
       </div>
@@ -1194,8 +749,8 @@ const SinhalaVoiceResponseSystem = () => {
             </svg>
             <p className="empty-chat-title">ඔබගේ සංවාදය ආරම්භ කරන්න</p>
             <p className="empty-chat-subtitle">
-              {isMobile.current ? 
-                "කතා කිරීම ආරම්භ කරන්න (කම්පනයෙන් දැනුවත් වනු ඇත)" : 
+              {window.innerWidth <= 768 ? 
+                "කතා කිරීම ආරම්භ කරන්න" : 
                 "හඩින් පණිවිඩයක් යැවීමට මයික්‍රොෆෝන බොත්තම ඔබන්න"}
             </p>
           </div>
@@ -1953,61 +1508,6 @@ const SinhalaVoiceResponseSystem = () => {
           0% { transform: scale(0.8); opacity: 0.5; }
           50% { transform: scale(1.1); opacity: 1; }
           100% { transform: scale(0.8); opacity: 0.5; }
-        }
-        
-        .sound-detection-indicator {
-          position: fixed;
-          bottom: 80px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: rgba(0,0,0,0.7);
-          color: white;
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-size: 0.9rem;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          z-index: 10;
-        }
-        
-        .sound-pulse-indicator {
-          width: 12px;
-          height: 12px;
-          background-color: #4caf50;
-          border-radius: 50%;
-          animation: pulse 1.5s infinite;
-        }
-        
-        .sound-level-bar {
-          width: 60px;
-          height: 6px;
-          background: rgba(255,255,255,0.2);
-          border-radius: 3px;
-          margin-left: 8px;
-          overflow: hidden;
-        }
-        
-        .sound-level-fill {
-          height: 100%;
-          background: #4caf50;
-          transition: width 0.1s;
-        }
-        
-        .vibration-support-indicator {
-          position: fixed;
-          top: 12px;
-          right: 12px;
-          z-index: 10;
-        }
-        
-        .vibration-active-indicator {
-          width: 6px;
-          height: 6px;
-          background-color: #34a853;
-          border-radius: 50%;
-          margin-left: 4px;
-          animation: pulse 1s infinite;
         }
         
         /* Sign response styles */
