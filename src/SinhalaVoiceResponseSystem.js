@@ -32,10 +32,16 @@ const SinhalaVoiceResponseSystem = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   
-  // Vibration state and ref
+  // Vibration and sound detection states
   const [isVibrating, setIsVibrating] = useState(false);
   const vibrationIntervalRef = useRef(null);
   const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const microphoneRef = useRef(null);
+  const soundDetectionIntervalRef = useRef(null);
+  const [soundDetected, setSoundDetected] = useState(false);
+  const [isSoundDetectionActive, setIsSoundDetectionActive] = useState(false);
 
   const [userMemory, setUserMemory] = useState(() => {
     const savedMemory = localStorage.getItem('userMemory');
@@ -69,7 +75,8 @@ const SinhalaVoiceResponseSystem = () => {
         recognitionRef.current.stop();
       }
       window.speechSynthesis.cancel();
-      stopVibration(); // Clean up vibration on unmount
+      stopVibration();
+      stopSoundDetection(); // Clean up sound detection on unmount
     };
   }, []);
 
@@ -88,8 +95,77 @@ const SinhalaVoiceResponseSystem = () => {
     if (!isMobile || !('vibrate' in navigator)) return;
     
     clearInterval(vibrationIntervalRef.current);
-    navigator.vibrate(0); // Stop any ongoing vibration
+    navigator.vibrate(0);
     setIsVibrating(false);
+  };
+
+  // Sound detection functions
+  const startSoundDetection = async () => {
+    try {
+      if (!isMobile) return;
+      
+      // Initialize audio context
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 32;
+      
+      // Get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream);
+      microphoneRef.current.connect(analyserRef.current);
+      
+      // Start analyzing sound
+      setIsSoundDetectionActive(true);
+      const bufferLength = analyserRef.current.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      soundDetectionIntervalRef.current = setInterval(() => {
+        analyserRef.current.getByteFrequencyData(dataArray);
+        
+        // Calculate average volume
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / bufferLength;
+        
+        // If sound is detected above threshold
+        if (average > 20 && !isRecording) { // Adjust threshold as needed
+          setSoundDetected(true);
+          startVibration();
+        } else if (soundDetected) {
+          setSoundDetected(false);
+          stopVibration();
+        }
+      }, 100); // Check every 100ms
+      
+    } catch (err) {
+      console.error('Error initializing sound detection:', err);
+      setSpeechError('Sound detection initialization failed');
+    }
+  };
+
+  const stopSoundDetection = () => {
+    if (soundDetectionIntervalRef.current) {
+      clearInterval(soundDetectionIntervalRef.current);
+    }
+    if (microphoneRef.current) {
+      microphoneRef.current.disconnect();
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+    }
+    setIsSoundDetectionActive(false);
+    setSoundDetected(false);
+    stopVibration();
+  };
+
+  const toggleSoundDetection = () => {
+    if (isSoundDetectionActive) {
+      stopSoundDetection();
+    } else {
+      startSoundDetection();
+    }
   };
 
   const loadChatHistory = () => {
@@ -281,33 +357,29 @@ const SinhalaVoiceResponseSystem = () => {
         const transcript = event.results[current][0].transcript;
         setInputMessage(prev => prev + ' ' + transcript);
         setIsRecording(false);
-        stopVibration(); // Stop vibration when speech is recognized
+        stopVibration();
         handleSendMessage();
       };
 
       recognition.onerror = (event) => {
         setSpeechError(`හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`);
         setIsRecording(false);
-        stopVibration(); // Stop vibration on error
+        stopVibration();
       };
 
       recognition.onend = () => {
         setIsRecording(false);
-        stopVibration(); // Stop vibration when recognition ends
+        stopVibration();
       };
 
       recognition.start();
       recognitionRef.current = recognition;
       setIsRecording(true);
       
-      // Start vibration when recording starts (for mobile)
-      if (isMobile) {
-        startVibration();
-      }
     } catch (err) {
       setSpeechError(err.message);
       setIsRecording(false);
-      stopVibration(); // Stop vibration on error
+      stopVibration();
     }
   };
 
@@ -315,7 +387,7 @@ const SinhalaVoiceResponseSystem = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsRecording(false);
-      stopVibration(); // Stop vibration when recording stops manually
+      stopVibration();
     }
   };
 
@@ -339,28 +411,16 @@ const SinhalaVoiceResponseSystem = () => {
 
     utterance.onstart = () => {
       setIsSpeaking(true);
-      // Start vibration when speech starts (for mobile)
-      if (isMobile && !isRecording) {
-        startVibration();
-      }
     };
     
     utterance.onend = () => {
       setIsSpeaking(false);
-      // Stop vibration when speech ends (for mobile)
-      if (isMobile && !isRecording) {
-        stopVibration();
-      }
     };
     
     utterance.onerror = (event) => {
       console.error('Speech error:', event);
       setIsSpeaking(false);
       setSpeechError('හඬ පිටකිරීමේ දෝෂයක්: ' + event.error);
-      // Stop vibration on error (for mobile)
-      if (isMobile) {
-        stopVibration();
-      }
     };
 
     window.speechSynthesis.speak(utterance);
@@ -369,10 +429,6 @@ const SinhalaVoiceResponseSystem = () => {
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
-    // Stop vibration when speaking stops (for mobile)
-    if (isMobile) {
-      stopVibration();
-    }
   };
 
   const handleSendMessage = async () => {
@@ -612,6 +668,19 @@ const SinhalaVoiceResponseSystem = () => {
             </svg>
             {window.innerWidth > 768 && 'මතකය'}
           </button>
+          {isMobile && (
+            <button 
+              onClick={toggleSoundDetection}
+              className={`sound-detection-button ${isSoundDetectionActive ? 'active' : ''}`}
+              title={isSoundDetectionActive ? 'Sound detection on' : 'Sound detection off'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 12V15C3 16.6569 4.34315 18 6 18H8L12 22V2L8 6H6C4.34315 6 3 7.34315 3 9V12Z" fill={isSoundDetectionActive ? "#4CAF50" : "currentColor"}/>
+                <path d="M16.5 12C16.5 10.067 15.037 8.5 13 8.5M19 12C19 8.13401 15.866 5 12 5M15.5 12C15.5 13.933 16.963 15.5 19 15.5M21 12C21 15.866 17.866 19 14 19" stroke={isSoundDetectionActive ? "#4CAF50" : "currentColor"} strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              {window.innerWidth > 768 && (isSoundDetectionActive ? 'Sound On' : 'Sound Off')}
+            </button>
+          )}
         </div>
       </div>
       
@@ -1066,6 +1135,14 @@ const SinhalaVoiceResponseSystem = () => {
         
         .header-controls button svg {
           flex-shrink: 0;
+        }
+        
+        .sound-detection-button.active {
+          background: rgba(76, 175, 80, 0.2);
+        }
+        
+        .sound-detection-button.active:hover {
+          background: rgba(76, 175, 80, 0.3);
         }
         
         .history-panel, .memory-panel {
