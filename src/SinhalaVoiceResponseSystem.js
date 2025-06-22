@@ -22,7 +22,6 @@ import october from './assets/ssl/October.jpeg';
 import september from './assets/ssl/September.jpeg';
 import term from './assets/ssl/Term.jpeg';
 import virus from './assets/ssl/Virus.jpeg';
-import defaultImage from './assets/ssl/Aids.jpeg';
 
 // Create your sign database
 const signDatabase = {
@@ -115,14 +114,12 @@ Object.values(signDatabase).forEach(item => {
 
 // Create a component to render text with sign images
 const SignResponse = ({ text }) => {
-  // Split text into tokens (words and punctuation)
-  const tokens = text.split(/([\s,\.\!\?]+)/).filter(token => token.trim().length > 0 || token.match(/[\s,\.\!\?]/));
+  const tokens = text.split(/([\s,.!?]+)/).filter(token => token.trim().length > 0 || token.match(/[\s,.!?]/));
 
   return (
     <div className="sign-response-container">
       {tokens.map((token, index) => {
-        // Check if token is whitespace or punctuation
-        if (token.match(/^[\s,\.\!\?]+$/)) {
+        if (token.match(/^[\s,.!?]+$/)) {
           return (
             <span key={index} className="whitespace">
               {token}
@@ -130,7 +127,6 @@ const SignResponse = ({ text }) => {
           );
         }
 
-        // Check if token has a corresponding sign
         const signData = Object.entries(signDatabase).find(([key, value]) => 
           value.sinhala === token || key.toLowerCase() === token.toLowerCase()
         );
@@ -154,7 +150,6 @@ const SignResponse = ({ text }) => {
           );
         }
 
-        // For words without signs, just display the text
         return (
           <span key={index} className="regular-word">
             {token}
@@ -273,7 +268,6 @@ const SinhalaVoiceResponseSystem = () => {
   const toggleVibration = () => {
     setVibrationEnabled(prev => {
       if (!prev && isMobile.current && 'vibrate' in navigator) {
-        // Just a quick vibration to indicate it's enabled
         navigator.vibrate([100]);
       } else {
         stopVibration();
@@ -282,34 +276,18 @@ const SinhalaVoiceResponseSystem = () => {
     });
   };
 
-  useEffect(() => {
-    setSpeechSupported('speechSynthesis' in window);
-    loadChatHistory();
-
-    const initAudioContext = async () => {
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const context = new AudioContext();
-        setAudioContext(context);
-        
-        const newAnalyser = context.createAnalyser();
-        newAnalyser.fftSize = 256;
-        setAnalyser(newAnalyser);
-      } catch (err) {
-        console.error('Audio Context error:', err);
-      }
-    };
-
-    initAudioContext();
-
-    return () => {
-      stopSoundDetection();
-      stopVibration();
-      if (audioContext) {
-        audioContext.close();
-      }
-    };
-  }, []);
+  const stopSoundDetection = useCallback(() => {
+    if (soundDetectionInterval.current) {
+      clearInterval(soundDetectionInterval.current);
+      soundDetectionInterval.current = null;
+    }
+    setIsSoundDetected(false);
+    stopVibration();
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+  }, [stopVibration]);
 
   const startSoundDetection = useCallback(async () => {
     try {
@@ -344,7 +322,6 @@ const SinhalaVoiceResponseSystem = () => {
         } else {
           setIsSoundDetected(false);
           if (isMobile.current && vibrationEnabled && isSoundDetected) {
-            // Quick vibration when sound stops
             navigator.vibrate([50]);
           }
         }
@@ -353,7 +330,36 @@ const SinhalaVoiceResponseSystem = () => {
       console.error('Microphone access error:', err);
       setSpeechError('මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අපොහොසත් විය. කරුණාකර මයික්‍රොෆෝන අවසර පරීක්ෂා කරන්න.');
     }
-  }, [analyser, audioContext, vibrationEnabled, startVibration, isSoundDetected]);
+  }, [analyser, audioContext, vibrationEnabled, startVibration, isSoundDetected, stopSoundDetection]);
+
+  useEffect(() => {
+    setSpeechSupported('speechSynthesis' in window);
+    loadChatHistory();
+
+    const initAudioContext = async () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const context = new AudioContext();
+        setAudioContext(context);
+        
+        const newAnalyser = context.createAnalyser();
+        newAnalyser.fftSize = 256;
+        setAnalyser(newAnalyser);
+      } catch (err) {
+        console.error('Audio Context error:', err);
+      }
+    };
+
+    initAudioContext();
+
+    return () => {
+      stopSoundDetection();
+      stopVibration();
+      if (audioContext) {
+        audioContext.close();
+      }
+    };
+  }, [stopSoundDetection, stopVibration]);
 
   useEffect(() => {
     if (audioContext && analyser && isMobile.current) {
@@ -362,20 +368,7 @@ const SinhalaVoiceResponseSystem = () => {
       stopSoundDetection();
       stopVibration();
     }
-  }, [audioContext, analyser, startSoundDetection, stopVibration]);
-
-  const stopSoundDetection = useCallback(() => {
-    if (soundDetectionInterval.current) {
-      clearInterval(soundDetectionInterval.current);
-      soundDetectionInterval.current = null;
-    }
-    setIsSoundDetected(false);
-    stopVibration();
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
-  }, [stopVibration]);
+  }, [audioContext, analyser, startSoundDetection, stopSoundDetection, stopVibration]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -564,12 +557,8 @@ const SinhalaVoiceResponseSystem = () => {
     setEditedMessageText('');
   };
 
-  const startRecording = async () => {
-    setSpeechError(null);
-    setInputMessage('');
-    
+  const initializeSpeechRecognition = () => {
     try {
-      // Check for mobile-specific SpeechRecognition API
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         throw new Error('ඔබගේ බ්‍රව්සරය හඩ හඳුනාගැනීම සඳහා සහාය නොදක්වයි');
@@ -581,19 +570,31 @@ const SinhalaVoiceResponseSystem = () => {
       recognition.continuous = false;
       recognition.maxAlternatives = 1;
 
+      recognition.onstart = () => {
+        setIsRecording(true);
+        setIsSoundDetected(false);
+      };
+
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         setInputMessage(prev => prev + ' ' + transcript);
-        setIsSoundDetected(false);
         setIsRecording(false);
         handleSendMessage();
       };
 
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
-        setSpeechError(`හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`);
-        setIsSoundDetected(false);
+        let errorMessage = `හඩ හඳුනාගැනීමේ දෝෂය: ${event.error}`;
+        
+        if (event.error === 'not-allowed') {
+          errorMessage = 'මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අවසර නැත. කරුණාකර අවසර ලබා දෙන්න.';
+        } else if (event.error === 'no-speech') {
+          errorMessage = 'කිසිදු හඩක් හඳුනාගත නොහැකි විය. නැවත උත්සාහ කරන්න.';
+        }
+        
+        setSpeechError(errorMessage);
         setIsRecording(false);
+        setIsSoundDetected(false);
       };
 
       recognition.onend = () => {
@@ -601,21 +602,44 @@ const SinhalaVoiceResponseSystem = () => {
         setIsSoundDetected(false);
       };
 
-      // Request microphone permission first
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(track => track.stop());
-      
-      recognition.start();
-      recognitionRef.current = recognition;
-      setIsRecording(true);
-      
-      if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
-        navigator.vibrate([200]);
-      }
+      return recognition;
     } catch (err) {
       console.error('Speech recognition initialization error:', err);
       setSpeechError(err.message);
+      setIsRecording(false);
       setIsSoundDetected(false);
+      return null;
+    }
+  };
+
+  const startRecording = async () => {
+    setSpeechError(null);
+    setInputMessage('');
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+      
+      const recognition = initializeSpeechRecognition();
+      if (!recognition) return;
+      
+      recognitionRef.current = recognition;
+      
+      setTimeout(() => {
+        try {
+          recognition.start();
+          if (isMobile.current && 'vibrate' in navigator && vibrationEnabled) {
+            navigator.vibrate([200]);
+          }
+        } catch (err) {
+          console.error('Error starting recognition:', err);
+          setSpeechError('හඩ හඳුනාගැනීම ආරම්භ කිරීමට නොහැකි විය. නැවත උත්සාහ කරන්න.');
+          setIsRecording(false);
+        }
+      }, 100);
+    } catch (err) {
+      console.error('Microphone permission error:', err);
+      setSpeechError('මයික්‍රොෆෝනයට ප්‍රවේශ වීමට අවසර නැත. කරුණාකර අවසර ලබා දෙන්න.');
       setIsRecording(false);
     }
   };
@@ -641,7 +665,6 @@ const SinhalaVoiceResponseSystem = () => {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'si-LK';
 
-    // Try to find a Sinhala voice
     const voices = window.speechSynthesis.getVoices();
     const sinhalaVoice = voices.find(voice => 
       voice.lang === 'si-LK' || voice.lang.startsWith('si-')
@@ -650,7 +673,6 @@ const SinhalaVoiceResponseSystem = () => {
     if (sinhalaVoice) {
       utterance.voice = sinhalaVoice;
     } else {
-      // Fallback to any available voice
       utterance.voice = voices.find(voice => voice.lang.includes('en')) || voices[0];
     }
 
