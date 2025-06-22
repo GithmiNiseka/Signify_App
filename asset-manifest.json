@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/Signify_App/static/css/main.2c478211.css",
-    "main.js": "/Signify_App/static/js/main.75610c91.js",
+    "main.js": "/Signify_App/static/js/main.a3bc442a.js",
     "static/js/488.5b39e5ea.chunk.js": "/Signify_App/static/js/488.5b39e5ea.chunk.js",
     "static/media/chest pain .jpeg": "/Signify_App/static/media/chest pain .bd2f9571727dbd43bb85.jpeg",
     "static/media/Future.jpeg": "/Signify_App/static/media/Future.4f3af38782e70143a148.jpeg",
@@ -22,11 +22,11 @@
     "static/media/Knee.jpeg": "/Signify_App/static/media/Knee.e510814b2ab15e5e896a.jpeg",
     "index.html": "/Signify_App/index.html",
     "main.2c478211.css.map": "/Signify_App/static/css/main.2c478211.css.map",
-    "main.75610c91.js.map": "/Signify_App/static/js/main.75610c91.js.map",
+    "main.a3bc442a.js.map": "/Signify_App/static/js/main.a3bc442a.js.map",
     "488.5b39e5ea.chunk.js.map": "/Signify_App/static/js/488.5b39e5ea.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.2c478211.css",
-    "static/js/main.75610c91.js"
+    "static/js/main.a3bc442a.js"
   ]
 }
